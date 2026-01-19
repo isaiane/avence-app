@@ -1,0 +1,56 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Domain {
+  B2B
+  B2C
+}
+
+model Business {
+  id        String   @id @default(uuid())
+  name      String?
+  createdAt DateTime @default(now())
+
+  phoneRoutes PhoneNumberRoute[]
+}
+
+model PhoneNumberRoute {
+  id            String   @id @default(uuid())
+  phoneNumberId String   @unique
+  domain        Domain
+  businessId    String?
+  createdAt     DateTime @default(now())
+
+  business Business? @relation(fields: [businessId], references: [id])
+}
+
+model InboundMessage {
+  id                String   @id @default(uuid())
+  providerMessageId String   @unique
+  phoneNumberId     String
+  fromWaId          String?
+  messageType       String?
+  textBody          String?
+  providerTimestamp String?
+  payload           Json
+  receivedAt        DateTime @default(now())
+}
+
+model AuditEvent {
+  id             String   @id @default(uuid())
+  eventType      String
+  domain         String
+  businessId     String?
+  phoneNumberId  String?
+  conversationId String?
+  payload        Json?
+  createdAt      DateTime @default(now())
+}
+
+
