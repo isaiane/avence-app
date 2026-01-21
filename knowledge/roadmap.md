@@ -1,6 +1,6 @@
 # Avence — Roadmap (NOW / NEXT / LATER)
 
-> Versão base: **v0.4** (Agent Kit definido). Este roadmap deve refletir o estado real do produto e evoluir a cada entrega.
+> Versão base: **v0.6** (onboarding B2B homologado + UAT/testes). Este roadmap deve refletir o estado real do produto e evoluir a cada entrega.
 
 ## DONE
 - **(2026-01-19) v0.1 — Base de Conhecimento inicial**
@@ -22,49 +22,36 @@
 - **(2026-01-19) v0.4 — Runtime de IA definido (OpenAI Agent Kit)**
   - OpenAI Agent Kit será o runtime que consome os MCPs (B2B e B2C)
   - MCPs permanecem separados por domínio, tools auditáveis e execução via backend
+- **(2026-01-20) v0.5 — Tools B2B iniciais (onboarding)**
+  - Modelos B2B mínimos no Prisma (plan, vínculo do MEI via `waId`, serviços, disponibilidade)
+  - Endpoints “tool-like” B2B em `app/api/mcp/b2b/**` com auth por token (`MCP_B2B_TOKEN`) e auditoria
+  - Validação do receiver via ngrok homologada (verify + ingest + inspect + seed)
+- **(2026-01-20) v0.6 — Onboarding B2B homologado + UAT/testes**
+  - UAT script: `npm run uat:b2b` (sem curl) executa onboarding B2B end-to-end
+  - Smoke test: `npm run validate:smoke`
+  - Testes automatizados (Vitest) cobrindo assinatura, normalização e rota de webhook
 
-## NOW (Fase 1 — Colocar o Receiver em produção e validar com WhatsApp real)
-Objetivo: validar o fluxo real ponta-a-ponta (verify + eventos + dedup) **rodando localmente** com um túnel (ex.: **ngrok**) — sem deploy em produção neste primeiro momento.
-
-Checklist (mínimo):
-- Subir Postgres local (ou dev) e aplicar migrações Prisma
-- Rodar o Next.js localmente (`npm run dev`)
-- Expor o endpoint via túnel (ex.: ngrok) apontando para a porta local
-- Configurar o webhook no Meta/WhatsApp Cloud API usando a URL do túnel:
-  - validar o **GET verify**
-  - receber evento real no **POST**
-- Semear `PhoneNumberRoute` para o `phone_number_id` do Business de teste (para validar B2C determinístico)
-
-Teste manual:
-- Configurar webhook real no Meta e validar o **GET verify**
-- Enviar mensagem real e verificar que o **POST**:
-  - valida assinatura
-  - deduplica corretamente em reentrega
-  - resolve domínio por `phone_number_id` (Avence → B2B; Business → B2C)
-
-Critério de promoção (quando fizer sentido):
-- Depois de validado via ngrok, promover para deploy em Vercel + Postgres gerenciado (produção/dev) com as mesmas env vars.
-
-Critérios de aceite:
-- Roteamento nunca depende do remetente
-- Reprocessar a mesma mensagem não duplica efeitos
-- Logs/auditoria incluem `domain`, `phone_number_id`, `conversation_id`
-
-## NEXT (Fase 2 — Onboarding B2B mínimo via tools)
-Objetivo: permitir onboarding end-to-end (B2B) com tools auditáveis.
+## NOW (Fase 3 — Dispatcher B2B (receiver → Agent Kit → tools))
+Objetivo: conectar o receiver do WhatsApp ao Agent Kit para conduzir onboarding automaticamente via MCP B2B.
 
 Checklist (mínimo):
-- `b2b.create_business`
-- `b2b.upsert_services`
-- `b2b.upsert_availability`
-- Estado de conversa B2B: `ONBOARDING`
+- Criar dispatcher B2B: ao receber mensagem B2B (por `phone_number_id`), produzir contexto e chamar Agent Kit
+- Agent Kit chama tools B2B com `businessId` apropriado (via `MeiContact.waId`)
+- Persistir estado de conversa (`Conversation.stateB2B`)
 
 Teste manual:
-- Simular conversa B2B de onboarding com fixtures e verificar criação/configuração.
+- Enviar mensagem B2B real e verificar:
+  - dispatcher invocado
+  - Agent Kit chama tools e persiste saídas
+  - estado de conversa avançado (ONBOARDING → MANAGEMENT, por exemplo)
 
 Critérios de aceite:
-- Onboarding só ocorre em B2B
-- Saídas obrigatórias do onboarding persistidas (business/serviços/disponibilidade/plano Start)
+- Dispatcher não mistura domínios (sempre por `phone_number_id`)
+- Tools executadas via backend (auditáveis)
+- Estado de conversa persistido
+
+## NEXT
+- Integrar envio real de mensagens do Avence para o MEI (WhatsApp Cloud API) no `b2b.reply_to_mei`
 
 ## LATER
 - Fase 3 — B2C Start (Copiloto): intents + templates + flows/webviews + handoff

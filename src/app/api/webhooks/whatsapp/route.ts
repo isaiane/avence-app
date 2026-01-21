@@ -56,13 +56,44 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, data: null, error: null }, { status: 200 });
   }
 
+  const value = (payload as any)?.entry?.[0]?.changes?.[0]?.value;
+  const phoneNumberIdFromPayload: string | undefined = value?.metadata?.phone_number_id;
+  const statusCount: number = Array.isArray(value?.statuses) ? value.statuses.length : 0;
+  const messageCount: number = Array.isArray(value?.messages) ? value.messages.length : 0;
+
   const normalized = normalizeWhatsAppWebhookPayload(payload as any);
   if (normalized.length === 0) {
+    // Common case: WhatsApp sends "statuses" webhooks (delivered/read/etc) without messages.
+    // We should ACK with 200 to avoid retries, but not pollute audit logs as "ignored".
+    if (phoneNumberIdFromPayload && statusCount > 0 && messageCount === 0) {
+      const resolved = await resolveDomainByPhoneNumberId(phoneNumberIdFromPayload);
+      await prisma.auditEvent.create({
+        data: {
+          eventType: "WHATSAPP_WEBHOOK_STATUS",
+          domain: resolved.domain,
+          businessId: resolved.businessId ?? undefined,
+          phoneNumberId: phoneNumberIdFromPayload,
+          payload: {
+            statusCount,
+            // keep minimal info; raw payload already exists in provider systems
+            sampleStatusIds: (value?.statuses ?? []).slice(0, 5).map((s: any) => s?.id).filter(Boolean),
+          },
+        },
+      });
+      return NextResponse.json({ success: true, data: null, error: null }, { status: 200 });
+    }
+
     await prisma.auditEvent.create({
       data: {
         eventType: "WHATSAPP_WEBHOOK_IGNORED",
         domain: "UNKNOWN",
-        payload: { reason: "No messages found", hasEntry: !!(payload as any)?.entry },
+        payload: {
+          reason: "No messages found",
+          hasEntry: !!(payload as any)?.entry,
+          phoneNumberId: phoneNumberIdFromPayload ?? null,
+          messageCount,
+          statusCount,
+        },
       },
     });
     return NextResponse.json({ success: true, data: null, error: null }, { status: 200 });

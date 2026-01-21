@@ -1,8 +1,8 @@
-# Snapshot Atual — Avence (v0.4)
+# Snapshot Atual — Avence (v0.6)
 
-Data: 2026-01-19  
-Versão: **v0.4**  
-Status: Receiver MVP implementado + runtime de IA definido (OpenAI Agent Kit); pronto para validação com WhatsApp real via ngrok
+Data: 2026-01-20  
+Versão: **v0.6**  
+Status: Onboarding B2B (manual) homologado + UAT/testes; pronto para dispatcher receiver → Agent Kit → tools
 
 ## O que existe hoje
 - Base de Conhecimento inicial em `/knowledge`
@@ -29,12 +29,21 @@ Status: Receiver MVP implementado + runtime de IA definido (OpenAI Agent Kit); p
 - Decisão de IA:
   - Usaremos o **OpenAI Agent Kit** como runtime que consumirá os **MCPs B2B e B2C**
   - Invariante mantido: tools separadas por domínio; backend executa e audita
+- Tools B2B (MVP inicial):
+  - Endpoints “tool-like” protegidos por `MCP_B2B_TOKEN`:
+    - `POST /api/mcp/b2b/create-business`
+    - `POST /api/mcp/b2b/upsert-services`
+    - `POST /api/mcp/b2b/upsert-availability`
+    - `POST /api/mcp/b2b/reply-to-mei` (MVP: apenas audita)
+- UATs e validação:
+  - `npm run uat:b2b` executa onboarding B2B end-to-end sem curl
+  - `npm run validate:smoke` valida verify + inspect
+- Testes automatizados:
+  - Vitest (`npm test`) cobrindo assinatura, normalização e rota de webhook (com mocks)
 
 ## Fluxos suportados (estado atual)
-- **Receiver de webhook** (B2B/B2C/UNKNOWN) implementado, mas ainda requer:
-  - migração do banco
-  - deploy em ambiente acessível ao WhatsApp (Vercel)
-  - configuração do webhook no Meta
+- **Receiver de webhook** (B2B/B2C/UNKNOWN) implementado e validável via ngrok.
+- **Onboarding B2B (manual via tools)**: homologado via UAT (Business/Serviços/Disponibilidade + auditoria).
 
 ## Contratos obrigatórios (resumo)
 - Receiver único público de webhook
@@ -45,23 +54,19 @@ Status: Receiver MVP implementado + runtime de IA definido (OpenAI Agent Kit); p
 ## Limitações conhecidas
 - Ainda não está validado em produção com WhatsApp real
 - Necessário seed do mapping `PhoneNumberRoute` para `phone_number_id` de Business (B2C)
-- Ainda não há pipeline de domínio (B2B/B2C) nem tools MCP
+- Dispatcher automático receiver → Agent Kit → tools ainda não existe (chamadas são manuais)
 
 ## NOW (próximo passo mínimo testável)
-Validação real via ambiente local + túnel:
-- Subir Postgres local (ou dev) + aplicar migrações Prisma
-- Rodar o Next.js localmente
-- Expor o endpoint via **ngrok** (ou similar)
-- Configurar webhook no Meta e validar:
-  - GET verify
-  - POST events reais
-  - dedup por `providerMessageId`
-  - roteamento por `phone_number_id`
+Dispatcher B2B (automação):
+- Ao receber inbound B2B (por `phone_number_id`), produzir contexto e chamar o Agent Kit
+- Agent Kit chama tools B2B (com `businessId` resolvido via `MeiContact.waId`)
+- Persistir estado em `Conversation.stateB2B`
 
 ## Configurações necessárias (para plugar no WhatsApp)
 - Segredo de assinatura do WhatsApp (app secret / webhook secret)
 - Verify token do webhook (para o GET challenge)
 - `phone_number_id` do Avence (quando disponível; pode iniciar com placeholder)
 - `DATABASE_URL` do Postgres (Vercel)
+- `MCP_B2B_TOKEN` (para tools B2B)
 
 

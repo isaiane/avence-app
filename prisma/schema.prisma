@@ -12,12 +12,39 @@ enum Domain {
   B2C
 }
 
+enum Plan {
+  START
+  PRO
+  PAY
+}
+
+enum B2BConversationState {
+  ONBOARDING
+  MANAGEMENT
+  SUPPORT
+  FALLBACK
+}
+
 model Business {
   id        String   @id @default(uuid())
   name      String?
+  plan      Plan     @default(START)
   createdAt DateTime @default(now())
 
   phoneRoutes PhoneNumberRoute[]
+  contacts    MeiContact[]
+  services    Service[]
+  availability AvailabilityRule[]
+}
+
+model MeiContact {
+  id         String   @id @default(uuid())
+  waId       String   @unique
+  displayName String?
+  createdAt  DateTime @default(now())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
 }
 
 model PhoneNumberRoute {
@@ -28,6 +55,44 @@ model PhoneNumberRoute {
   createdAt     DateTime @default(now())
 
   business Business? @relation(fields: [businessId], references: [id])
+}
+
+model Service {
+  id         String   @id @default(uuid())
+  name       String
+  priceCents Int?
+  durationMin Int?
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+
+  @@unique([businessId, name])
+}
+
+model AvailabilityRule {
+  id        String   @id @default(uuid())
+  weekday   Int      // 0=Sunday ... 6=Saturday
+  startMin  Int      // minutes from 00:00
+  endMin    Int
+  createdAt DateTime @default(now())
+
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+
+  @@index([businessId, weekday])
+}
+
+model Conversation {
+  id        String   @id @default(uuid())
+  domain    Domain
+  stateB2B  B2BConversationState?
+  businessId String?
+  phoneNumberId String?
+  fromWaId  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model InboundMessage {
