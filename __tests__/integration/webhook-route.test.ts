@@ -5,12 +5,18 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 const prismaMocks = vi.hoisted(() => ({
   auditCreate: vi.fn(async () => ({})),
   inboundCreate: vi.fn(async () => ({})),
+  conversationFindFirst: vi.fn(async () => null),
+  conversationCreate: vi.fn(async () => ({ id: "conv_1", businessId: null, stateB2B: "ONBOARDING" })),
 }));
 
 vi.mock("@/server/infra/db/prisma", () => ({
   prisma: {
     auditEvent: { create: prismaMocks.auditCreate },
     inboundMessage: { create: prismaMocks.inboundCreate },
+    conversation: {
+      findFirst: prismaMocks.conversationFindFirst,
+      create: prismaMocks.conversationCreate,
+    },
   },
 }));
 
@@ -20,6 +26,14 @@ const routingMocks = vi.hoisted(() => ({
 
 vi.mock("@/server/routing/resolve-domain", () => ({
   resolveDomainByPhoneNumberId: routingMocks.resolveDomainByPhoneNumberId,
+}));
+
+const dispatchMocks = vi.hoisted(() => ({
+  dispatchB2BInbound: vi.fn(async () => ({ ok: true })),
+}));
+
+vi.mock("@/server/dispatcher/b2b-dispatch", () => ({
+  dispatchB2BInbound: dispatchMocks.dispatchB2BInbound,
 }));
 
 import { GET, POST } from "@/app/api/webhooks/whatsapp/route";
@@ -88,6 +102,36 @@ describe("/api/webhooks/whatsapp route", () => {
       (c) => c?.[0]?.data?.eventType === "WHATSAPP_WEBHOOK_STATUS",
     );
     expect(call).toBeTruthy();
+  });
+
+  it("POST message in B2B dispatches to B2B dispatcher (once) for new messages", async () => {
+    const payload = {
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                metadata: { phone_number_id: "pnid_1" },
+                messages: [
+                  { id: "wamid.1", from: "5511999999999", type: "text", text: { body: "oi" }, timestamp: "1" },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const raw = Buffer.from(JSON.stringify(payload), "utf8");
+    const req = new Request("http://localhost/api/webhooks/whatsapp", {
+      method: "POST",
+      headers: { "x-hub-signature-256": sign("secret", raw) },
+      body: raw,
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    expect(dispatchMocks.dispatchB2BInbound).toHaveBeenCalledTimes(1);
   });
 });
 

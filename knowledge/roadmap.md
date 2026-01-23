@@ -1,6 +1,6 @@
 # Avence — Roadmap (NOW / NEXT / LATER)
 
-> Versão base: **v0.6** (onboarding B2B homologado + UAT/testes). Este roadmap deve refletir o estado real do produto e evoluir a cada entrega.
+> Versão base: **v0.7** (dispatcher B2B com conversa canônica). Este roadmap deve refletir o estado real do produto e evoluir a cada entrega.
 
 ## DONE
 - **(2026-01-19) v0.1 — Base de Conhecimento inicial**
@@ -30,6 +30,10 @@
   - UAT script: `npm run uat:b2b` (sem curl) executa onboarding B2B end-to-end
   - Smoke test: `npm run validate:smoke`
   - Testes automatizados (Vitest) cobrindo assinatura, normalização e rota de webhook
+- **(2026-01-23) v0.7 — Dispatcher B2B (stub) homologado com rastreabilidade**
+  - Receiver aciona dispatcher B2B apenas para mensagens novas (idempotência)
+  - `Conversation` canônica garantida no ingest B2B; `WHATSAPP_WEBHOOK_RECEIVED` agora inclui `conversation_id`
+  - Tools B2B passam a preencher `phone_number_id` nos `AuditEvent` (ex.: `B2B_CREATE_BUSINESS`, `B2B_REPLY_TO_MEI_REQUESTED`)
 
 ## NOW (Fase 3 — Dispatcher B2B (receiver → Agent Kit → tools))
 Objetivo: conectar o receiver do WhatsApp ao Agent Kit para conduzir onboarding automaticamente via MCP B2B.
@@ -42,7 +46,7 @@ Checklist (mínimo):
 Teste manual:
 - Enviar mensagem B2B real e verificar:
   - dispatcher invocado
-  - Agent Kit chama tools e persiste saídas
+  - (stub hoje) agent executa tools e persiste saídas
   - estado de conversa avançado (ONBOARDING → MANAGEMENT, por exemplo)
 
 Critérios de aceite:

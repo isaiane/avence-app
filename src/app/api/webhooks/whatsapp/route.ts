@@ -3,6 +3,12 @@ import { prisma } from "@/server/infra/db/prisma";
 import { resolveDomainByPhoneNumberId } from "@/server/routing/resolve-domain";
 import { normalizeWhatsAppWebhookPayload } from "@/server/entrypoints/whatsapp/normalize";
 import { verifyWhatsAppSignature } from "@/server/entrypoints/whatsapp/signature";
+import { dispatchB2BInbound } from "@/server/dispatcher/b2b-dispatch";
+import { ensureB2BConversation } from "@/server/dispatcher/ensure-b2b-conversation";
+
+function isMissingTableError(e: any): boolean {
+  return e?.code === "P2021" || String(e?.message ?? "").includes("does not exist");
+}
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -102,10 +108,20 @@ export async function POST(request: Request) {
   // All messages in a webhook share the same phone_number_id (in practice).
   const phoneNumberId = normalized[0].phoneNumberId;
   const resolved = await resolveDomainByPhoneNumberId(phoneNumberId);
+  const meiWaId = normalized[0].fromWaId;
+
+  // For B2B, we treat Conversation as canonical and start it at webhook ingest time.
+  // This lets WHATSAPP_WEBHOOK_RECEIVED be correlated to the conversation.
+  const conversation =
+    resolved.domain === "B2B" && meiWaId
+      ? await ensureB2BConversation({ phoneNumberId, meiWaId })
+      : null;
 
   // Persist messages idempotently.
   // We do per-message writes to keep behavior obvious for MVP.
+  let fatalDbError: { message: string } | null = null;
   for (const msg of normalized) {
+    let isNewMessage = false;
     try {
       await prisma.inboundMessage.create({
         data: {
@@ -118,10 +134,18 @@ export async function POST(request: Request) {
           payload: msg.raw as any,
         },
       });
+      isNewMessage = true;
     } catch (e: any) {
       // Unique constraint -> duplicate delivery (idempotency).
       // Prisma error code for unique constraint: P2002
       if (e?.code !== "P2002") {
+        if (isMissingTableError(e)) {
+          fatalDbError = {
+            message:
+              "DB schema missing (tables do not exist). Run Prisma migrations against the DATABASE_URL in use by the server.",
+          };
+          break;
+        }
         await prisma.auditEvent.create({
           data: {
             eventType: "WHATSAPP_INBOUND_PERSIST_ERROR",
@@ -133,6 +157,49 @@ export async function POST(request: Request) {
         });
       }
     }
+
+    // Dispatcher (MVP): only for *new* messages.
+    if (isNewMessage && resolved.domain === "B2B") {
+      // IMPORTANT: don't block the WhatsApp webhook response on agent dispatch.
+      // In dev, first request can be slow due to compilation; in prod, we still want fast ACKs.
+      // This is best-effort in serverless; long-term we should move to a proper queue/outbox.
+      void dispatchB2BInbound({
+        phoneNumberId,
+        meiWaId: msg.fromWaId,
+        text: msg.textBody,
+        providerMessageId: msg.providerMessageId,
+      }).catch(async (e) => {
+        try {
+          await prisma.auditEvent.create({
+            data: {
+              eventType: "B2B_DISPATCH_ERROR",
+              domain: "B2B",
+              phoneNumberId,
+              payload: {
+                providerMessageId: msg.providerMessageId,
+                error: String(e),
+              },
+            },
+          });
+        } catch {
+          // ignore (e.g. DB not migrated yet)
+        }
+      });
+    }
+  }
+
+  if (fatalDbError) {
+    return NextResponse.json(
+      {
+        success: false,
+        data: null,
+        error: {
+          message: fatalDbError.message,
+          hint: "Run: npm run prisma:generate && npm run prisma:migrate (with DATABASE_URL pointing to the correct DB).",
+        },
+      },
+      { status: 500 },
+    );
   }
 
   await prisma.auditEvent.create({
@@ -141,6 +208,7 @@ export async function POST(request: Request) {
       domain: resolved.domain,
       businessId: resolved.businessId ?? undefined,
       phoneNumberId,
+      conversationId: conversation?.id,
       payload: {
         messageCount: normalized.length,
         providerMessageIds: normalized.map((m) => m.providerMessageId),

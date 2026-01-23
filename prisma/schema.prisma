@@ -29,93 +29,105 @@ model Business {
   id        String   @id @default(uuid())
   name      String?
   plan      Plan     @default(START)
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
 
-  phoneRoutes PhoneNumberRoute[]
-  contacts    MeiContact[]
-  services    Service[]
+  phoneRoutes  PhoneNumberRoute[]
+  contacts     MeiContact[]
+  services     Service[]
   availability AvailabilityRule[]
+
+  @@map("business")
 }
 
 model MeiContact {
-  id         String   @id @default(uuid())
-  waId       String   @unique
-  displayName String?
-  createdAt  DateTime @default(now())
+  id          String   @id @default(uuid())
+  waId        String   @unique @map("wa_id")
+  displayName String?  @map("display_name")
+  createdAt   DateTime @default(now()) @map("created_at")
 
-  businessId String
+  businessId String   @map("business_id")
   business   Business @relation(fields: [businessId], references: [id])
+
+  @@map("mei_contact")
 }
 
 model PhoneNumberRoute {
   id            String   @id @default(uuid())
-  phoneNumberId String   @unique
+  phoneNumberId String   @unique @map("phone_number_id")
   domain        Domain
-  businessId    String?
-  createdAt     DateTime @default(now())
+  businessId    String?  @map("business_id")
+  createdAt     DateTime @default(now()) @map("created_at")
 
   business Business? @relation(fields: [businessId], references: [id])
+
+  @@map("phone_number_route")
 }
 
 model Service {
-  id         String   @id @default(uuid())
-  name       String
-  priceCents Int?
-  durationMin Int?
-  active     Boolean  @default(true)
-  createdAt  DateTime @default(now())
+  id          String   @id @default(uuid())
+  name        String
+  priceCents  Int?     @map("price_cents")
+  durationMin Int?     @map("duration_min")
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
 
-  businessId String
+  businessId String   @map("business_id")
   business   Business @relation(fields: [businessId], references: [id])
 
   @@unique([businessId, name])
+  @@map("service")
 }
 
 model AvailabilityRule {
   id        String   @id @default(uuid())
-  weekday   Int      // 0=Sunday ... 6=Saturday
-  startMin  Int      // minutes from 00:00
-  endMin    Int
-  createdAt DateTime @default(now())
+  weekday   Int // 0=Sunday ... 6=Saturday
+  startMin  Int      @map("start_min") // minutes from 00:00
+  endMin    Int      @map("end_min")
+  createdAt DateTime @default(now()) @map("created_at")
 
-  businessId String
+  businessId String   @map("business_id")
   business   Business @relation(fields: [businessId], references: [id])
 
   @@index([businessId, weekday])
+  @@map("availability_rule")
 }
 
 model Conversation {
-  id        String   @id @default(uuid())
-  domain    Domain
-  stateB2B  B2BConversationState?
-  businessId String?
-  phoneNumberId String?
-  fromWaId  String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String                @id @default(uuid())
+  domain        Domain
+  stateB2B      B2BConversationState? @map("state_b2b")
+  businessId    String?               @map("business_id")
+  phoneNumberId String?               @map("phone_number_id")
+  fromWaId      String?               @map("from_wa_id")
+  createdAt     DateTime              @default(now()) @map("created_at")
+  updatedAt     DateTime              @updatedAt @map("updated_at")
+
+  @@map("conversation")
 }
 
 model InboundMessage {
   id                String   @id @default(uuid())
-  providerMessageId String   @unique
-  phoneNumberId     String
-  fromWaId          String?
-  messageType       String?
-  textBody          String?
-  providerTimestamp String?
+  providerMessageId String   @unique @map("provider_message_id")
+  phoneNumberId     String   @map("phone_number_id")
+  fromWaId          String?  @map("from_wa_id")
+  messageType       String?  @map("message_type")
+  textBody          String?  @map("text_body")
+  providerTimestamp String?  @map("provider_timestamp")
   payload           Json
-  receivedAt        DateTime @default(now())
+  receivedAt        DateTime @default(now()) @map("received_at")
+
+  @@map("inbound_message")
 }
 
 model AuditEvent {
   id             String   @id @default(uuid())
-  eventType      String
+  eventType      String   @map("event_type")
   domain         String
-  businessId     String?
-  phoneNumberId  String?
-  conversationId String?
+  businessId     String?  @map("business_id")
+  phoneNumberId  String?  @map("phone_number_id")
+  conversationId String?  @map("conversation_id")
   payload        Json?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("audit_event")
 }
-
-

@@ -1,8 +1,8 @@
-# Snapshot Atual — Avence (v0.6)
+# Snapshot Atual — Avence (v0.7)
 
-Data: 2026-01-20  
-Versão: **v0.6**  
-Status: Onboarding B2B (manual) homologado + UAT/testes; pronto para dispatcher receiver → Agent Kit → tools
+Data: 2026-01-23  
+Versão: **v0.7**  
+Status: Dispatcher B2B (stub) homologado com conversa canônica e auditoria correlacionada por `conversation_id`
 
 ## O que existe hoje
 - Base de Conhecimento inicial em `/knowledge`
@@ -26,6 +26,10 @@ Status: Onboarding B2B (manual) homologado + UAT/testes; pronto para dispatcher 
     - normalização mínima + persistência idempotente (`InboundMessage`)
     - trilha mínima (`AuditEvent`)
     - roteamento determinístico por `phone_number_id` (Avence/DB/UNKNOWN)
+  - Dispatcher B2B (stub):
+    - receiver dispara dispatcher B2B apenas para mensagens novas (idempotência)
+    - conversa canônica (`Conversation`) garantida no ingest B2B
+    - tools B2B registram `AuditEvent` com `conversation_id` e `phone_number_id`
 - Decisão de IA:
   - Usaremos o **OpenAI Agent Kit** como runtime que consumirá os **MCPs B2B e B2C**
   - Invariante mantido: tools separadas por domínio; backend executa e audita
@@ -54,13 +58,13 @@ Status: Onboarding B2B (manual) homologado + UAT/testes; pronto para dispatcher 
 ## Limitações conhecidas
 - Ainda não está validado em produção com WhatsApp real
 - Necessário seed do mapping `PhoneNumberRoute` para `phone_number_id` de Business (B2C)
-- Dispatcher automático receiver → Agent Kit → tools ainda não existe (chamadas são manuais)
+- Integração real com OpenAI Agent Kit ainda não existe (agent atual é stub)
 
 ## NOW (próximo passo mínimo testável)
-Dispatcher B2B (automação):
-- Ao receber inbound B2B (por `phone_number_id`), produzir contexto e chamar o Agent Kit
-- Agent Kit chama tools B2B (com `businessId` resolvido via `MeiContact.waId`)
-- Persistir estado em `Conversation.stateB2B`
+Substituir stub pelo Agent Kit:
+- Implementar `runB2BAgent` usando OpenAI Agent Kit consumindo MCP B2B
+- Garantir que todas as tool calls carreguem `businessId`, `phone_number_id` e `conversation_id`
+- Evoluir state machine B2B em `Conversation.stateB2B`
 
 ## Configurações necessárias (para plugar no WhatsApp)
 - Segredo de assinatura do WhatsApp (app secret / webhook secret)

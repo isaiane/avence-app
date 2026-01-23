@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { prisma } from "@/server/infra/db/prisma";
 import { requireMcpToken } from "@/server/mcp/auth";
+import { b2bCreateBusiness } from "@/server/domains/b2b/tools";
 
 const Schema = z.object({
   meiWaId: z.string().min(1),
@@ -23,37 +23,14 @@ export async function POST(request: Request) {
   }
 
   const { meiWaId, businessName, meiDisplayName } = parsed.data;
-
-  const business = await prisma.business.create({
-    data: { name: businessName },
-  });
-
-  await prisma.meiContact.upsert({
-    where: { waId: meiWaId },
-    create: { waId: meiWaId, displayName: meiDisplayName, businessId: business.id },
-    update: { displayName: meiDisplayName, businessId: business.id },
-  });
-
-  await prisma.conversation.create({
-    data: {
-      domain: "B2B",
-      stateB2B: "ONBOARDING",
-      businessId: business.id,
-      fromWaId: meiWaId,
-    },
-  });
-
-  await prisma.auditEvent.create({
-    data: {
-      eventType: "B2B_CREATE_BUSINESS",
-      domain: "B2B",
-      businessId: business.id,
-      payload: { meiWaId },
-    },
+  const { businessId } = await b2bCreateBusiness({
+    meiWaId,
+    businessName,
+    meiDisplayName,
   });
 
   return NextResponse.json(
-    { success: true, data: { businessId: business.id }, error: null },
+    { success: true, data: { businessId }, error: null },
     { status: 200 },
   );
 }
