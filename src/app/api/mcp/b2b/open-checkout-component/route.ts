@@ -1,20 +1,17 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireMcpToken } from "@/server/mcp/auth";
-import { b2bCreateBusiness } from "@/server/domains/b2b/tools";
+import { b2bOpenCheckoutComponent } from "@/server/domains/b2b/tools";
 
 const Schema = z.object({
+  businessId: z.string().min(1),
   meiWaId: z.string().min(1),
-  businessName: z.string().min(1).optional(),
-  meiDisplayName: z.string().min(1).optional(),
-  conversationId: z.preprocess(
-    (v) => (v === "" ? undefined : v),
-    z.string().min(1).optional(),
-  ),
+  conversationId: z.string().min(1),
   phoneNumberId: z.preprocess(
     (v) => (v === "" ? undefined : v),
     z.string().min(1).optional(),
   ),
+  plan: z.enum(["START", "PRO", "PAY"]).optional(),
 });
 
 export async function POST(request: Request) {
@@ -30,20 +27,9 @@ export async function POST(request: Request) {
     );
   }
 
-  const { meiWaId, businessName, meiDisplayName, conversationId, phoneNumberId } =
-    parsed.data;
-  const { businessId } = await b2bCreateBusiness({
-    meiWaId,
-    businessName,
-    meiDisplayName,
-    conversationId,
-    phoneNumberId,
-  });
-
-  return NextResponse.json(
-    { success: true, data: { businessId }, error: null },
-    { status: 200 },
-  );
+  const out = await b2bOpenCheckoutComponent(parsed.data);
+  return NextResponse.json({ success: true, data: out, error: null }, { status: 200 });
 }
+
 
 

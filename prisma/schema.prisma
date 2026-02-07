@@ -25,6 +25,29 @@ enum B2BConversationState {
   FALLBACK
 }
 
+enum B2BStage {
+  SALES_RECEPTION
+  SALES_DIAGNOSIS
+  ONBOARDING_ASSISTED
+  ONBOARDING_COMPLETED
+  PLAN_SELECTION
+  WAITING
+  HANDOFF_HUMAN
+}
+
+enum AgentJobStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+}
+
+enum OutboundMessageStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
 model Business {
   id        String   @id @default(uuid())
   name      String?
@@ -96,6 +119,7 @@ model Conversation {
   id            String                @id @default(uuid())
   domain        Domain
   stateB2B      B2BConversationState? @map("state_b2b")
+  stageB2B      B2BStage              @default(SALES_RECEPTION) @map("stage_b2b")
   businessId    String?               @map("business_id")
   phoneNumberId String?               @map("phone_number_id")
   fromWaId      String?               @map("from_wa_id")
@@ -130,4 +154,44 @@ model AuditEvent {
   createdAt      DateTime @default(now()) @map("created_at")
 
   @@map("audit_event")
+}
+
+model AgentJob {
+  id              String         @id @default(uuid())
+  domain          Domain
+  kind            String
+  status          AgentJobStatus @default(PENDING)
+  providerMessageId String?      @unique @map("provider_message_id")
+  phoneNumberId   String         @map("phone_number_id")
+  conversationId  String         @map("conversation_id")
+  fromWaId        String         @map("from_wa_id")
+  payload         Json
+  attempts        Int            @default(0)
+  lockedAt        DateTime?      @map("locked_at")
+  lockedBy        String?        @map("locked_by")
+  lastError       String?        @map("last_error")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  @@index([domain, status, createdAt])
+  @@map("agent_job")
+}
+
+model OutboundMessage {
+  id             String                @id @default(uuid())
+  domain         Domain
+  status         OutboundMessageStatus @default(PENDING)
+  idempotencyKey String                @unique @map("idempotency_key")
+  providerMessageId String?            @map("provider_message_id")
+  businessId     String?               @map("business_id")
+  phoneNumberId  String?               @map("phone_number_id")
+  conversationId String?               @map("conversation_id")
+  toWaId         String                @map("to_wa_id")
+  text           String
+  error          String?
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
+
+  @@index([domain, status, createdAt])
+  @@map("outbound_message")
 }

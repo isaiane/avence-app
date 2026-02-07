@@ -1,12 +1,17 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireMcpToken } from "@/server/mcp/auth";
-import { b2bCreateBusiness } from "@/server/domains/b2b/tools";
+import { b2bSendFlow } from "@/server/domains/b2b/tools";
 
 const Schema = z.object({
+  businessId: z.string().min(1),
   meiWaId: z.string().min(1),
-  businessName: z.string().min(1).optional(),
-  meiDisplayName: z.string().min(1).optional(),
+  bodyText: z.string().min(1),
+  flowId: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(1).optional()),
+  flowToken: z.string().min(1),
+  flowCta: z.string().min(1),
+  screen: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(1).optional()),
+  data: z.record(z.unknown()).optional(),
   conversationId: z.preprocess(
     (v) => (v === "" ? undefined : v),
     z.string().min(1).optional(),
@@ -30,20 +35,8 @@ export async function POST(request: Request) {
     );
   }
 
-  const { meiWaId, businessName, meiDisplayName, conversationId, phoneNumberId } =
-    parsed.data;
-  const { businessId } = await b2bCreateBusiness({
-    meiWaId,
-    businessName,
-    meiDisplayName,
-    conversationId,
-    phoneNumberId,
-  });
-
-  return NextResponse.json(
-    { success: true, data: { businessId }, error: null },
-    { status: 200 },
-  );
+  const out = await b2bSendFlow(parsed.data);
+  return NextResponse.json({ success: true, data: out, error: null }, { status: 200 });
 }
 
 

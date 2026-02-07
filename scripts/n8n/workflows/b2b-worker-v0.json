@@ -1,0 +1,208 @@
+{
+  "name": "Avence B2B Worker (v0) — AgentJobs -> MCP (no ChatKit)",
+  "nodes": [
+    {
+      "parameters": {
+        "triggerTimes": [
+          {
+            "mode": "everyMinute"
+          }
+        ]
+      },
+      "id": "Cron",
+      "name": "Cron (poll)",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [240, 280]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{$env.AVENCE_BACKEND_URL + \"/api/agent-jobs/b2b/next?lockedBy=\" + encodeURIComponent($env.N8N_WORKER_ID || \"n8n-dev\")}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-agent-jobs-token",
+              "value": "={{$env.AGENT_JOBS_TOKEN}}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "Claim Job",
+      "name": "Claim Job (jobs.b2b_next)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [470, 280]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.success}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "If success",
+      "name": "If claim ok",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [690, 280]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{String($json.data.job !== null)}}",
+              "operation": "equals",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "id": "If has job",
+      "name": "If has job",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [910, 280]
+    },
+    {
+      "parameters": {
+        "keepOnlySet": true,
+        "values": {
+          "string": [
+            { "name": "jobId", "value": "={{$json.data.job.id}}" },
+            { "name": "conversationId", "value": "={{$json.data.job.conversationId}}" },
+            { "name": "meiWaId", "value": "={{$json.data.job.fromWaId}}" },
+            { "name": "phoneNumberId", "value": "={{$json.data.job.phoneNumberId}}" },
+            { "name": "text", "value": "={{$json.data.job.payload.text || \"\"}}" }
+          ]
+        }
+      },
+      "id": "Extract",
+      "name": "Extract job fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [1130, 280]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.AVENCE_BACKEND_URL + \"/api/mcp/b2b/get-mei-status\"}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-mcp-token", "value": "={{$env.MCP_B2B_TOKEN}}" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { meiWaId: $json.meiWaId, conversationId: $json.conversationId, phoneNumberId: $json.phoneNumberId } }}",
+        "options": { "timeout": 10000 }
+      },
+      "id": "Get status",
+      "name": "b2b.get_mei_status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1350, 280]
+    },
+    {
+      "parameters": {
+        "jsCode": "const status = $json?.data ?? null;\nconst isCustomer = Boolean(status?.isCustomer);\nconst activeStage = status?.activeStage ?? 'SALES_RECEPTION';\n\n// v0 behavior (no LLM yet):\n// - If already customer: simple resume message\n// - Else: ask the 3 mandatory questions from SALES_RECEPTION\n\nlet replyText = '';\nif (isCustomer) {\n  replyText = 'Oi! Vi aqui que você já é cliente do Avence 🙂\\n\\nMe diz só: você quer ajuda com alguma coisa agora (agenda, serviços, horários), ou quer retomar de onde parou?';\n} else {\n  replyText = 'Oi! Que bom que você chegou.\\nO Avence ajuda MEIs a organizar atendimento, agenda e dinheiro direto pelo WhatsApp.\\n\\nAntes de te explicar melhor, posso te perguntar rapidinho?\\nQual é seu nome, com o que você trabalha e de onde você é (cidade/estado)?';\n}\n\nreturn [{\n  jobId: $input.item.json.jobId,\n  conversationId: $input.item.json.conversationId,\n  meiWaId: $input.item.json.meiWaId,\n  phoneNumberId: $input.item.json.phoneNumberId,\n  activeStage,\n  isCustomer,\n  replyText,\n}];"
+      },
+      "id": "Decide v0",
+      "name": "Decide reply (v0)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1570, 280]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.AVENCE_BACKEND_URL + \"/api/mcp/b2b/reply-to-mei\"}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-mcp-token", "value": "={{$env.MCP_B2B_TOKEN}}" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { meiWaId: $json.meiWaId, text: $json.replyText, conversationId: $json.conversationId, phoneNumberId: $json.phoneNumberId } }}",
+        "options": { "timeout": 15000 }
+      },
+      "id": "Reply",
+      "name": "b2b.reply_to_mei (businessId optional)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1790, 280]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.AVENCE_BACKEND_URL + \"/api/agent-jobs/b2b/\" + $json.jobId + \"/complete?lockedBy=\" + encodeURIComponent($env.N8N_WORKER_ID || \"n8n-dev\")}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-agent-jobs-token", "value": "={{$env.AGENT_JOBS_TOKEN}}" }
+          ]
+        },
+        "options": { "timeout": 10000 }
+      },
+      "id": "Complete",
+      "name": "jobs.b2b_complete",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2010, 280]
+    }
+  ],
+  "connections": {
+    "Cron (poll)": {
+      "main": [[{ "node": "Claim Job (jobs.b2b_next)", "type": "main", "index": 0 }]]
+    },
+    "Claim Job (jobs.b2b_next)": {
+      "main": [[{ "node": "If claim ok", "type": "main", "index": 0 }]]
+    },
+    "If claim ok": {
+      "main": [
+        [{ "node": "If has job", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "If has job": {
+      "main": [
+        [{ "node": "Extract job fields", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Extract job fields": {
+      "main": [[{ "node": "b2b.get_mei_status", "type": "main", "index": 0 }]]
+    },
+    "b2b.get_mei_status": {
+      "main": [[{ "node": "Decide reply (v0)", "type": "main", "index": 0 }]]
+    },
+    "Decide reply (v0)": {
+      "main": [[{ "node": "b2b.reply_to_mei (businessId optional)", "type": "main", "index": 0 }]]
+    },
+    "b2b.reply_to_mei (businessId optional)": {
+      "main": [[{ "node": "jobs.b2b_complete", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionTimeout": 120,
+    "saveExecutionProgress": true
+  },
+  "versionId": "1"
+}
+
+

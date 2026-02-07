@@ -1,6 +1,6 @@
 # Avence — Roadmap (NOW / NEXT / LATER)
 
-> Versão base: **v0.7** (dispatcher B2B com conversa canônica). Este roadmap deve refletir o estado real do produto e evoluir a cada entrega.
+> Versão base: **v0.7** (modelo agnóstico via AgentJob/outbox). Este roadmap deve refletir o estado real do produto e evoluir a cada entrega.
 
 ## DONE
 - **(2026-01-19) v0.1 — Base de Conhecimento inicial**
@@ -30,24 +30,25 @@
   - UAT script: `npm run uat:b2b` (sem curl) executa onboarding B2B end-to-end
   - Smoke test: `npm run validate:smoke`
   - Testes automatizados (Vitest) cobrindo assinatura, normalização e rota de webhook
-- **(2026-01-23) v0.7 — Dispatcher B2B (stub) homologado com rastreabilidade**
-  - Receiver aciona dispatcher B2B apenas para mensagens novas (idempotência)
-  - `Conversation` canônica garantida no ingest B2B; `WHATSAPP_WEBHOOK_RECEIVED` agora inclui `conversation_id`
-  - Tools B2B passam a preencher `phone_number_id` nos `AuditEvent` (ex.: `B2B_CREATE_BUSINESS`, `B2B_REPLY_TO_MEI_REQUESTED`)
+- **(2026-01-23) v0.7 — Orquestração agnóstica (AgentJob/outbox)**
+  - Receiver/dispatcher cria `AgentJob` (idempotente) em vez de chamar Agent Kit direto
+  - Consumidor externo (n8n/Agent Kit/worker) faz pull/ack e chama MCP tools
 
-## NOW (Fase 3 — Dispatcher B2B (receiver → Agent Kit → tools))
-Objetivo: conectar o receiver do WhatsApp ao Agent Kit para conduzir onboarding automaticamente via MCP B2B.
+## NOW (Fase 3 — Orquestração externa consumindo Agent Jobs)
+Objetivo: rodar a lógica de orquestração fora do backend (n8n/Agent Kit), consumindo `AgentJob` e chamando MCP tools.
 
 Checklist (mínimo):
-- Criar dispatcher B2B: ao receber mensagem B2B (por `phone_number_id`), produzir contexto e chamar Agent Kit
-- Agent Kit chama tools B2B com `businessId` apropriado (via `MeiContact.waId`)
-- Persistir estado de conversa (`Conversation.stateB2B`)
+- Implementar consumidor externo (mínimo):
+  - `GET /api/agent-jobs/b2b/next` (claim)
+  - chamar tools MCP B2B necessárias
+  - `POST /complete` ou `/fail`
+- Definir estratégia de lock/retry (usar `lockedBy` e `attempts`)
 
 Teste manual:
 - Enviar mensagem B2B real e verificar:
-  - dispatcher invocado
-  - (stub hoje) agent executa tools e persiste saídas
-  - estado de conversa avançado (ONBOARDING → MANAGEMENT, por exemplo)
+  - `AgentJob` criado (audit: `B2B_JOB_ENQUEUED`)
+  - consumidor claim/complete (audit: `B2B_JOB_CLAIMED`/`B2B_JOB_COMPLETED`)
+  - tools chamadas e persistência confirmada
 
 Critérios de aceite:
 - Dispatcher não mistura domínios (sempre por `phone_number_id`)

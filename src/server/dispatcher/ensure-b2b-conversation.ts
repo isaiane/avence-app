@@ -9,7 +9,7 @@ export async function ensureB2BConversation(params: {
   const existing = await prisma.conversation.findFirst({
     where: { domain: "B2B", fromWaId: meiWaId },
     orderBy: { updatedAt: "desc" },
-    select: { id: true, businessId: true, stateB2B: true },
+    select: { id: true, businessId: true, stateB2B: true, stageB2B: true },
   });
 
   if (existing) return existing;
@@ -18,10 +18,11 @@ export async function ensureB2BConversation(params: {
     data: {
       domain: "B2B",
       stateB2B: "ONBOARDING",
+      stageB2B: "SALES_RECEPTION",
       fromWaId: meiWaId,
       phoneNumberId,
     },
-    select: { id: true, businessId: true, stateB2B: true },
+    select: { id: true, businessId: true, stateB2B: true, stageB2B: true },
   });
 }
 

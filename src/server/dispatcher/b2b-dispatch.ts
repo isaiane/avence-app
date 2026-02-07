@@ -1,6 +1,6 @@
 import { prisma } from "@/server/infra/db/prisma";
-import { runB2BAgent } from "@/server/agent/b2b/run-b2b-agent";
 import { ensureB2BConversation } from "@/server/dispatcher/ensure-b2b-conversation";
+import { enqueueB2BMessageJob } from "@/server/agent-jobs/b2b";
 
 export async function dispatchB2BInbound(params: {
   phoneNumberId: string;
@@ -13,36 +13,15 @@ export async function dispatchB2BInbound(params: {
 
   const conv = await ensureB2BConversation({ phoneNumberId, meiWaId });
 
-  await prisma.auditEvent.create({
-    data: {
-      eventType: "B2B_DISPATCH_START",
-      domain: "B2B",
-      businessId: conv.businessId ?? undefined,
-      phoneNumberId,
-      conversationId: conv.id,
-      payload: { providerMessageId },
-    },
-  });
-
-  const result = await runB2BAgent({
+  const job = await enqueueB2BMessageJob({
+    providerMessageId,
     phoneNumberId,
     conversationId: conv.id,
-    meiWaId,
+    fromWaId: meiWaId,
     text,
   });
 
-  await prisma.auditEvent.create({
-    data: {
-      eventType: "B2B_DISPATCH_END",
-      domain: "B2B",
-      businessId: result.businessId ?? undefined,
-      phoneNumberId,
-      conversationId: conv.id,
-      payload: { providerMessageId, action: result.action },
-    },
-  });
-
-  return { ok: true as const };
+  return { ok: true as const, jobId: job.id };
 }
 
 

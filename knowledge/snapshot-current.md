@@ -2,7 +2,7 @@
 
 Data: 2026-01-23  
 Versão: **v0.7**  
-Status: Dispatcher B2B (stub) homologado com conversa canônica e auditoria correlacionada por `conversation_id`
+Status: Orquestração agnóstica via AgentJob/outbox; pronto para conectar n8n/Agent Kit como consumidor externo
 
 ## O que existe hoje
 - Base de Conhecimento inicial em `/knowledge`
@@ -26,13 +26,12 @@ Status: Dispatcher B2B (stub) homologado com conversa canônica e auditoria corr
     - normalização mínima + persistência idempotente (`InboundMessage`)
     - trilha mínima (`AuditEvent`)
     - roteamento determinístico por `phone_number_id` (Avence/DB/UNKNOWN)
-  - Dispatcher B2B (stub):
-    - receiver dispara dispatcher B2B apenas para mensagens novas (idempotência)
-    - conversa canônica (`Conversation`) garantida no ingest B2B
-    - tools B2B registram `AuditEvent` com `conversation_id` e `phone_number_id`
 - Decisão de IA:
   - Usaremos o **OpenAI Agent Kit** como runtime que consumirá os **MCPs B2B e B2C**
   - Invariante mantido: tools separadas por domínio; backend executa e audita
+- Modelo agnóstico (outbox):
+  - Backend cria `AgentJob` para mensagens novas (B2B) e não acopla à ferramenta consumidora
+  - Orquestrador externo (n8n/Agent Kit) consome jobs via endpoints (`next/complete/fail`)
 - Tools B2B (MVP inicial):
   - Endpoints “tool-like” protegidos por `MCP_B2B_TOKEN`:
     - `POST /api/mcp/b2b/create-business`
@@ -48,6 +47,7 @@ Status: Dispatcher B2B (stub) homologado com conversa canônica e auditoria corr
 ## Fluxos suportados (estado atual)
 - **Receiver de webhook** (B2B/B2C/UNKNOWN) implementado e validável via ngrok.
 - **Onboarding B2B (manual via tools)**: homologado via UAT (Business/Serviços/Disponibilidade + auditoria).
+- **Enfileiramento B2B**: mensagens B2B novas geram `AgentJob` (idempotente) para consumo externo.
 
 ## Contratos obrigatórios (resumo)
 - Receiver único público de webhook
@@ -58,13 +58,14 @@ Status: Dispatcher B2B (stub) homologado com conversa canônica e auditoria corr
 ## Limitações conhecidas
 - Ainda não está validado em produção com WhatsApp real
 - Necessário seed do mapping `PhoneNumberRoute` para `phone_number_id` de Business (B2C)
-- Integração real com OpenAI Agent Kit ainda não existe (agent atual é stub)
+- Consumidor externo (n8n/Agent Kit) ainda não está implementado/configurado
 
 ## NOW (próximo passo mínimo testável)
-Substituir stub pelo Agent Kit:
-- Implementar `runB2BAgent` usando OpenAI Agent Kit consumindo MCP B2B
-- Garantir que todas as tool calls carreguem `businessId`, `phone_number_id` e `conversation_id`
-- Evoluir state machine B2B em `Conversation.stateB2B`
+Consumidor externo (automação):
+- Implementar workflow no n8n ou Agent Kit que:
+  - faz `GET /api/agent-jobs/b2b/next`
+  - chama tools MCP B2B necessárias
+  - faz `POST /complete` ou `/fail`
 
 ## Configurações necessárias (para plugar no WhatsApp)
 - Segredo de assinatura do WhatsApp (app secret / webhook secret)
@@ -72,5 +73,6 @@ Substituir stub pelo Agent Kit:
 - `phone_number_id` do Avence (quando disponível; pode iniciar com placeholder)
 - `DATABASE_URL` do Postgres (Vercel)
 - `MCP_B2B_TOKEN` (para tools B2B)
+- `AGENT_JOBS_TOKEN` (para consumir agent jobs)
 
 

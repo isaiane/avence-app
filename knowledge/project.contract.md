@@ -208,7 +208,8 @@ Todas as ações passam por tools B2B
 
 Nenhuma lógica B2C é exposta
 
-Todas as tools exigem business_id
+Tools **de mutação/efeito colateral** devem incluir `business_id` quando disponível (auditabilidade).
+Tools de leitura/identificação (ex.: `b2b.get_mei_status`, `b2b.get_context`) podem operar sem `business_id`.
 
 Todas as ações são auditáveis
 

@@ -8,6 +8,8 @@
  *
  * Opcional:
  * - BUSINESS_NAME, MEI_DISPLAY_NAME
+ * - UAT_SEND_REPLY=1 (habilita envio real via b2b.reply_to_mei)
+ * - UAT_PHONE_NUMBER_ID (se não conseguir resolver via conversationId/AVENCE_PHONE_NUMBER_ID)
  */
 
 function mustGetEnv(name) {
@@ -53,6 +55,8 @@ async function main() {
   const meiWaId = mustGetEnv("MEI_WA_ID");
   const businessName = process.env.BUSINESS_NAME || "Meu Negócio";
   const meiDisplayName = process.env.MEI_DISPLAY_NAME || "MEI Teste";
+  const sendReply = process.env.UAT_SEND_REPLY === "1";
+  const uatPhoneNumberId = process.env.UAT_PHONE_NUMBER_ID || undefined;
 
   console.log("==> UAT B2B onboarding");
   console.log(`BASE_URL=${baseUrl}`);
@@ -93,13 +97,20 @@ async function main() {
   );
   console.log(availabilityRes);
 
-  console.log("\n4) reply-to-mei (audit-only)");
-  const replyRes = await postJson(baseUrl, "/api/mcp/b2b/reply-to-mei", token, {
-    businessId,
-    meiWaId,
-    text: "Onboarding concluído ✅ (audit-only)",
-  });
-  console.log(replyRes);
+  console.log("\n4) reply-to-mei");
+  if (!sendReply) {
+    console.log(
+      "SKIP (default). Para enviar de verdade via WhatsApp Cloud API: UAT_SEND_REPLY=1 (e configurar WHATSAPP_ACCESS_TOKEN no backend).",
+    );
+  } else {
+    const replyRes = await postJson(baseUrl, "/api/mcp/b2b/reply-to-mei", token, {
+      businessId,
+      meiWaId,
+      text: "Onboarding concluído ✅",
+      phoneNumberId: uatPhoneNumberId,
+    });
+    console.log(replyRes);
+  }
 
   console.log("\nOK");
   console.log(`businessId=${businessId}`);

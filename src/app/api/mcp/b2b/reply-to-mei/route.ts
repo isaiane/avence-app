@@ -4,9 +4,11 @@ import { requireMcpToken } from "@/server/mcp/auth";
 import { b2bReplyToMeiRequested } from "@/server/domains/b2b/tools";
 
 const Schema = z.object({
-  businessId: z.string().min(1),
+  businessId: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(1).optional()),
   meiWaId: z.string().min(1),
   text: z.string().min(1),
+  conversationId: z.string().min(1).optional(),
+  phoneNumberId: z.string().min(1).optional(),
 });
 
 export async function POST(request: Request) {
@@ -22,13 +24,18 @@ export async function POST(request: Request) {
     );
   }
 
-  const { businessId, meiWaId, text } = parsed.data;
+  const { businessId, meiWaId, text, conversationId, phoneNumberId } = parsed.data;
 
-  // MVP: we don't send WhatsApp messages yet; we just audit the "intent to reply".
-  await b2bReplyToMeiRequested({ businessId, meiWaId, text });
+  const out = await b2bReplyToMeiRequested({
+    businessId: businessId ?? undefined,
+    meiWaId,
+    text,
+    conversationId,
+    phoneNumberId,
+  });
 
   return NextResponse.json(
-    { success: true, data: { sent: false }, error: null },
+    { success: true, data: out, error: null },
     { status: 200 },
   );
 }

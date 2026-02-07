@@ -172,7 +172,7 @@ export async function POST(request: Request) {
         try {
           await prisma.auditEvent.create({
             data: {
-              eventType: "B2B_DISPATCH_ERROR",
+              eventType: "B2B_JOB_ENQUEUE_ERROR",
               domain: "B2B",
               phoneNumberId,
               payload: {

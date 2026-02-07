@@ -1,0 +1,5 @@
+-- AddEnumValue
+ALTER TYPE "B2BStage" ADD VALUE IF NOT EXISTS 'PLAN_SELECTION';
+
+
+
